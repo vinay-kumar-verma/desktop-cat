@@ -142,6 +142,7 @@ async function init() {
   scheduleYawn();
   schedulePlay();
   scheduleHourlyEvents();
+  reportCatRect();
 }
 
 function waitForSVG(timeout = 3000) {
@@ -514,84 +515,60 @@ function eventPos(e) {
 function startDrag(e) {
   if (cat.pose === 'sleeping') { showSpeech('shhh 🤫'); return; }
   e.preventDefault();
-
-  cat.isDragging    = true;
-  const pos         = eventPos(e);
-  const rect        = container.getBoundingClientRect();
-  cat.dragOffset    = { x: pos.x - rect.left, y: pos.y - rect.top };
-  cat.lastDragPos   = { x: pos.x, y: pos.y };
-  cat.lastDragTime  = Date.now();
-  cat.dragVelocity  = { x: 0, y: 0 };
-
+  cat.isDragging   = true;
+  cat.lastDragPos  = eventPos(e);
+  cat.lastDragTime = Date.now();
+  cat.dragVelocity = { x: 0, y: 0 };
   setPose('walk');
-  
 }
 
 function doDrag(e) {
   if (!cat.isDragging) return;
   e.preventDefault();
-
   const pos = eventPos(e);
-  const now = Date.now();
-  const dt  = now - cat.lastDragTime;
-
-  if (dt > 16) {
-    cat.dragVelocity = {
-      x: (pos.x - cat.lastDragPos.x) / dt * 16,
-      y: (pos.y - cat.lastDragPos.y) / dt * 16,
-    };
-    cat.lastDragPos  = { x: pos.x, y: pos.y };
-    cat.lastDragTime = now;
-  }
-
-  const maxX = window.innerWidth  - container.offsetWidth;
-  const maxY = window.innerHeight - container.offsetHeight;
-  const newX = Math.max(0, Math.min(maxX, pos.x - cat.dragOffset.x));
-  const newY = Math.max(0, Math.min(maxY, pos.y - cat.dragOffset.y));
-
-  container.style.left   = newX + 'px';
-  container.style.top    = newY + 'px';
-  container.style.bottom = 'auto';
+  const dx  = pos.x - cat.lastDragPos.x;
+  const dy  = pos.y - cat.lastDragPos.y;
+  cat.dragVelocity = { x: dx, y: dy };
+  cat.lastDragPos  = pos;
+  window.catAPI.moveWindow({ dx, dy });
 }
 
 function endDrag() {
   if (!cat.isDragging) return;
   cat.isDragging = false;
-
   applyInertia(cat.dragVelocity.x, cat.dragVelocity.y);
-
-  const rect = container.getBoundingClientRect();
-  window.catAPI.savePosition({ x: Math.round(rect.left), y: Math.round(rect.top) });
-
   cat.positionSince = Date.now();
-  cat.lastPosition  = { x: rect.left, y: rect.top };
-
   setTimeout(() => { if (cat.pose === 'walk') setPose('idle'); }, 400);
 }
 
 function applyInertia(vx, vy) {
-  let x = parseFloat(container.style.left) || 0;
-  let y = parseFloat(container.style.top)  || 0;
-  const maxX = window.innerWidth  - container.offsetWidth;
-  const maxY = window.innerHeight - container.offsetHeight;
-
   function step() {
     vx *= 0.82; vy *= 0.82;
-    x = Math.max(0, Math.min(maxX, x + vx));
-    y = Math.max(0, Math.min(maxY, y + vy));
-    container.style.left = x + 'px';
-    container.style.top  = y + 'px';
-
-    if (Math.abs(vx) > 0.3 || Math.abs(vy) > 0.3) {
+    if (Math.abs(vx) > 0.5 || Math.abs(vy) > 0.5) {
+      window.catAPI.moveWindow({ dx: Math.round(vx), dy: Math.round(vy) });
       requestAnimationFrame(step);
-    } else {
-      window.catAPI.savePosition({ x: Math.round(x), y: Math.round(y) });
     }
   }
   requestAnimationFrame(step);
 }
 
+
+
 // ── Size ───────────────────────────────────────────────────
+
+// ── Cat rect reporting ─────────────────────────────────────
+function reportCatRect() {
+  const svg = svgEl();
+  if (!svg) return;
+  const r = svg.getBoundingClientRect();
+  window.catAPI.setCatRect({
+    x: Math.floor(r.left),
+    y: Math.floor(r.top),
+    w: Math.ceil(r.width),
+    h: Math.ceil(r.height)
+  });
+}
+
 function applySize(px) {
   const svg = svgEl();
   if (svg) {
@@ -603,6 +580,7 @@ function applySize(px) {
   container.style.width  = padded + 'px';
   container.style.height = padded + 'px';
   cat.config.size = px;
+  reportCatRect();
 }
 
 // ── Accessories ────────────────────────────────────────────

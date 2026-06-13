@@ -12,8 +12,8 @@
       position: absolute;
       width: 160px;
       height: 160px;
-      left: 20px;
-      top: 10px;
+      left: 0;
+      top: 0;
       bottom: auto;
     }
     /* Speech bubble: floats above the cat */
@@ -36,6 +36,12 @@
       animation-play-state: paused !important;
     }
     /* Moonlight glow handled in styles.css */
+    body {
+  pointer-events: none;
+    }
+    #cat-container {
+      pointer-events: auto;
+    }
   </style>
 </head>
 <body>
