@@ -1,0 +1,309 @@
+/* ── Reset & Base ──────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 200px;
+  height: 200px;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+#app {
+  position: relative;
+  width: 200px;
+  height: 200px;
+}
+
+/* ── Cat container ─────────────────────────────────────────── */
+#cat-container {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  left: 40px;
+  top: 40px;
+  cursor: grab;
+  /* No will-change here — let GPU decide */
+}
+
+#cat-container:active { cursor: grabbing; }
+
+#cat-svg {
+  display: block;
+  overflow: visible;
+}
+
+/* ── Pose visibility ───────────────────────────────────────── */
+.pose          { display: none; }
+.pose.active   { display: block; }
+
+/* ── IDLE animations ───────────────────────────────────────── */
+@keyframes tail-sway {
+  0%,100% { transform: rotate(0deg);   }
+  28%     { transform: rotate(11deg);  }
+  72%     { transform: rotate(-9deg);  }
+}
+
+@keyframes idle-float {
+  0%,100% { transform: translateY(0px);   }
+  50%     { transform: translateY(-1.5px); }
+}
+
+#pose-idle.active #idle-tail {
+  transform-origin: 60px 62px;
+  animation: tail-sway 2.8s ease-in-out infinite;
+}
+
+#pose-idle.active #idle-head {
+  animation: idle-float 3.2s ease-in-out infinite;
+}
+
+/* ── WALK animation ────────────────────────────────────────── */
+@keyframes walk-bob {
+  0%,100% { transform: translateY(0px)   rotate(0deg);  }
+  25%     { transform: translateY(-2.5px) rotate(1deg);  }
+  75%     { transform: translateY(-2px)  rotate(-1deg); }
+}
+
+#pose-walk.active {
+  animation: walk-bob 0.38s ease-in-out infinite;
+}
+
+/* ── TYPING animations ─────────────────────────────────────── */
+@keyframes paw-tap-L {
+  0%,100% { transform: translateY(0); }
+  50%     { transform: translateY(-9px) rotate(-6deg); }
+}
+@keyframes paw-tap-R {
+  0%,100%  { transform: translateY(0); }
+  25%,75%  { transform: translateY(-9px) rotate(6deg); }
+}
+@keyframes type-bob {
+  0%,100% { transform: translateY(0) rotate(0deg); }
+  50%     { transform: translateY(1.5px) rotate(0.8deg); }
+}
+@keyframes tongue-peek {
+  0%,78%,100% { opacity: 0; }
+  82%,96%     { opacity: 1; }
+}
+
+#pose-typing.active #typing-paws > path:first-child {
+  animation: paw-tap-L 0.24s ease-in-out infinite;
+  transform-origin: 28px 60px;
+}
+#pose-typing.active #typing-paws > path:last-child {
+  animation: paw-tap-R 0.24s ease-in-out infinite;
+  transform-origin: 50px 60px;
+}
+#pose-typing.active #tongue {
+  animation: tongue-peek 4s ease-in-out infinite;
+}
+
+/* ── SCROLL animation ──────────────────────────────────────── */
+@keyframes ball-roll {
+  from { transform: rotate(0deg);   }
+  to   { transform: rotate(360deg); }
+}
+
+#pose-scroll.active {
+  animation: ball-roll 0.55s linear infinite;
+  transform-origin: 40px 46px;
+}
+
+/* ── HUNGRY animations ─────────────────────────────────────── */
+@keyframes reach-L {
+  0%,100% { transform: rotate(0deg) translateY(0); }
+  50%     { transform: rotate(-16deg) translateY(-5px); }
+}
+@keyframes reach-R {
+  0%,100% { transform: rotate(0deg) translateY(0); }
+  50%     { transform: rotate(16deg) translateY(-5px); }
+}
+@keyframes heart-pulse {
+  0%,100% { transform: scale(1) translateY(0);    opacity: 0.9; }
+  50%     { transform: scale(1.35) translateY(-4px); opacity: 1;   }
+}
+
+#pose-hungry.active ~ #heart-bubble {
+  display: block;
+  animation: heart-pulse 1s ease-in-out infinite;
+  transform-origin: 50px 12px;
+}
+
+/* ── EATING animations ─────────────────────────────────────── */
+@keyframes nom-nom {
+  0%,100% { transform: scaleY(1);                    }
+  35%,65% { transform: scaleY(0.83) translateY(2px); }
+}
+@keyframes tail-happy {
+  0%,100% { transform: rotate(0deg);  }
+  25%     { transform: rotate(22deg); }
+  75%     { transform: rotate(-6deg); }
+}
+
+#pose-eating.active #eating-head {
+  animation: nom-nom 0.28s ease-in-out infinite;
+  transform-origin: 40px 30px;
+}
+
+/* ── OVERFED animation ─────────────────────────────────────── */
+@keyframes dreamy-float {
+  0%,100% { transform: translateY(0)   rotate(0deg);   }
+  33%     { transform: translateY(-2px) rotate(0.8deg);  }
+  66%     { transform: translateY(-1px) rotate(-0.4deg); }
+}
+
+#pose-overfed.active {
+  animation: dreamy-float 2.2s ease-in-out infinite;
+}
+
+/* ── SLEEPING animations ───────────────────────────────────── */
+@keyframes sleep-z1 {
+  0%,100%     { opacity: 0; transform: translateY(0)    scale(0.5); }
+  12%, 22%    { opacity: 0.85; transform: translateY(-4px) scale(1);   }
+  38%         { opacity: 0; transform: translateY(-10px) scale(0.7); }
+}
+@keyframes sleep-z2 {
+  0%,18%,100% { opacity: 0; transform: translateY(0)    scale(0.5); }
+  30%, 42%    { opacity: 0.7; transform: translateY(-5px) scale(1);   }
+  58%         { opacity: 0; transform: translateY(-12px) scale(0.7); }
+}
+@keyframes sleep-z3 {
+  0%,36%,100% { opacity: 0; transform: translateY(0)    scale(0.5); }
+  50%, 62%    { opacity: 0.55; transform: translateY(-6px) scale(1);   }
+  78%         { opacity: 0; transform: translateY(-14px) scale(0.6); }
+}
+
+#pose-sleeping.active ~ #z-bubbles         { display: block; }
+#pose-sleeping.active ~ #z-bubbles #z1     { animation: sleep-z1 3s ease-in-out infinite; }
+#pose-sleeping.active ~ #z-bubbles #z2     { animation: sleep-z2 3s ease-in-out 0.6s infinite; }
+#pose-sleeping.active ~ #z-bubbles #z3     { animation: sleep-z3 3s ease-in-out 1.2s infinite; }
+
+/* ── PLAYING animations ────────────────────────────────────── */
+@keyframes ball-bounce {
+  0%   { transform: translate(0,0);        }
+  20%  { transform: translate(14px,-13px); }
+  40%  { transform: translate(28px,0);     }
+  55%  { transform: translate(28px,-8px);  }
+  70%  { transform: translate(18px,0);     }
+  85%  { transform: translate(9px,-5px);   }
+  100% { transform: translate(0,0);        }
+}
+
+#pose-playing.active #pixel-ball {
+  animation: ball-bounce 2s ease-in-out infinite;
+  transform-origin: 6px 52px;
+}
+
+/* ── ANGRY animations ──────────────────────────────────────── */
+@keyframes steam-L {
+  0%   { opacity: 0; transform: translate(0,0)    scale(0.3); }
+  30%  { opacity: 0.7; transform: translate(-2px,-5px)  scale(1);   }
+  60%  { opacity: 0.5; transform: translate(-4px,-9px)  scale(1.2); }
+  100% { opacity: 0; transform: translate(-7px,-16px) scale(0.8); }
+}
+@keyframes steam-R {
+  0%   { opacity: 0; transform: translate(0,0)   scale(0.3); }
+  30%  { opacity: 0.7; transform: translate(2px,-5px)  scale(1);   }
+  60%  { opacity: 0.5; transform: translate(4px,-9px)  scale(1.2); }
+  100% { opacity: 0; transform: translate(7px,-16px) scale(0.8); }
+}
+
+#pose-angry.active ~ #steam-clouds                  { display: block; }
+#pose-angry.active ~ #steam-clouds circle:nth-child(1) { animation: steam-L 1.2s ease-out infinite; }
+#pose-angry.active ~ #steam-clouds circle:nth-child(2) { animation: steam-L 1.2s ease-out 0.3s  infinite; }
+#pose-angry.active ~ #steam-clouds circle:nth-child(3) { animation: steam-L 1.2s ease-out 0.6s  infinite; }
+#pose-angry.active ~ #steam-clouds circle:nth-child(4) { animation: steam-R 1.2s ease-out 0.15s infinite; }
+#pose-angry.active ~ #steam-clouds circle:nth-child(5) { animation: steam-R 1.2s ease-out 0.45s infinite; }
+#pose-angry.active ~ #steam-clouds circle:nth-child(6) { animation: steam-R 1.2s ease-out 0.75s infinite; }
+
+/* ── STARTLED animation ────────────────────────────────────── */
+@keyframes startled-jump {
+  0%   { transform: translateY(0)    scaleY(1);    }
+  18%  { transform: translateY(-15px) scaleY(1.08); }
+  34%  { transform: translateY(-22px) scaleY(1.05); }
+  52%  { transform: translateY(-17px) scaleY(1);    }
+  68%  { transform: translateY(-5px)  scaleY(0.96); }
+  84%  { transform: translateY(-2px)  scaleY(1.03); }
+  100% { transform: translateY(0)    scaleY(1);    }
+}
+
+#pose-startled.active {
+  animation: startled-jump 0.72s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards;
+}
+
+/* ── SUNBATHING animation ──────────────────────────────────── */
+@keyframes sunbathe-breathe {
+  0%,100% { transform: scaleX(1)    scaleY(1);    }
+  50%     { transform: scaleX(1.03) scaleY(0.97); }
+}
+
+#pose-sunbathing.active {
+  animation: sunbathe-breathe 4s ease-in-out infinite;
+  transform-origin: 40px 50px;
+}
+
+/* ── SPEECH BUBBLE ─────────────────────────────────────────── */
+@keyframes bubble-appear {
+  0%   { opacity: 0; transform: scale(0.7) translateY(6px);  }
+  12%  { opacity: 1; transform: scale(1.04) translateY(-1px); }
+  16%  { opacity: 1; transform: scale(1) translateY(0);      }
+  75%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-6px);            }
+}
+
+#bubble-svg {
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.18));
+}
+
+/* ── Moonlight mode ────────────────────────────────────────── */
+body.moonlight #cat-svg {
+  filter:
+    drop-shadow(0 0 7px rgba(140,170,255,0.45))
+    drop-shadow(0 4px 8px rgba(0,0,0,0.4));
+}
+body.moonlight #pose-idle.active #idle-tail {
+  animation-duration: 4.8s;
+}
+body.moonlight #pose-idle.active #idle-head {
+  animation-duration: 5.2s;
+}
+
+/* ── Sneeze overlay ────────────────────────────────────────── */
+@keyframes sneeze-burst {
+  0%   { opacity: 0; transform: scale(0); }
+  30%  { opacity: 1; transform: scale(1.4); }
+  100% { opacity: 0; transform: scale(0.6) translateY(9px); }
+}
+
+#sneeze-particles.active circle,
+#sneeze-particles.active text {
+  animation: sneeze-burst 0.85s ease-out forwards;
+}
+#sneeze-particles.active circle:nth-child(2) { animation-delay: 0.05s; }
+#sneeze-particles.active circle:nth-child(3) { animation-delay: 0.10s; }
+#sneeze-particles.active circle:nth-child(4) { animation-delay: 0.08s; }
+#sneeze-particles.active text               { animation-delay: 0.14s; }
+
+/* ── Suspended: freeze all animations ─────────────────────── */
+body.suspended *,
+body.suspended *::before,
+body.suspended *::after {
+  animation-play-state: paused !important;
+}
+
+/* ── Reduced motion ────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Angry red tint ────────────────────────────────────────── */
+#pose-angry.active {
+  filter: drop-shadow(0 0 8px rgba(255, 60, 60, 0.8)) sepia(0.3) saturate(2) hue-rotate(-20deg);
+}

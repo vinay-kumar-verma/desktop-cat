@@ -1,0 +1,48 @@
+{
+  "name": "desktop-cat",
+  "version": "1.0.0",
+  "description": "A living desktop companion cat",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
+  },
+  "keywords": [
+    "desktop-pet",
+    "electron",
+    "cat"
+  ],
+  "author": "You",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.desktopcat.app",
+    "productName": "DesktopCat",
+    "files": [
+      "src/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "src/assets/tray-icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "src/assets/tray-icon.icns",
+      "category": "public.app-category.utilities"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "src/assets/tray-icon.png",
+      "category": "Utility"
+    }
+  }
+}
