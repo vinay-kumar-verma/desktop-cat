@@ -89,7 +89,7 @@ const cat = {
 
   // Drag
   isDragging:     false,
-  dragOffset:     { x: 0, y: 0 },
+  dragMoved:      false,
   dragVelocity:   { x: 0, y: 0 },
   lastDragPos:    { x: 0, y: 0 },
   lastDragTime:   0,
@@ -177,9 +177,19 @@ function setPose(name) {
   if (zBubbles)    zBubbles.style.display    = (name === 'sleeping') ? 'block' : 'none';
   if (steamClouds) steamClouds.style.display  = (name === 'angry')    ? 'block' : 'none';
   if (heartBubble) heartBubble.style.display  = (name === 'hungry')   ? 'block' : 'none';
+}
 
-  // Never ignore mouse events — always keep cat clickable and draggable
-  window.catAPI.setIgnoreMouse(false);
+// ── Cat rect reporting ─────────────────────────────────────
+function reportCatRect() {
+  const svg = svgEl();
+  if (!svg) return;
+  const r = svg.getBoundingClientRect();
+  window.catAPI.setCatRect({
+    x: Math.floor(r.left),
+    y: Math.floor(r.top),
+    w: Math.ceil(r.width),
+    h: Math.ceil(r.height)
+  });
 }
 
 // ── Blinking ───────────────────────────────────────────────
@@ -208,12 +218,10 @@ function scheduleYawn() {
   cat.yawnTimer = setTimeout(() => {
     if (cat.pose === 'idle' && !cat.suspended) {
       showSpeech('*yawn* 🎵', 2500);
-      // Temporarily morph the nose path to look like a wide open mouth
       const svg = svgEl();
       if (svg) {
         const idlePose = getEl('pose-idle');
         if (idlePose) {
-          // Find the nose diamond shape and stretch it briefly
           const nosePath = idlePose.querySelector('path[fill="#c97a7a"]');
           if (nosePath) {
             const original = nosePath.getAttribute('d');
@@ -252,10 +260,9 @@ function showSpeech(text, duration = 3500) {
 
   bubbleText.textContent = text;
 
-  // Show and animate
   bubbleSvg.style.display = 'block';
   bubbleSvg.style.animation = 'none';
-  void bubbleSvg.offsetWidth; // force reflow to restart animation
+  void bubbleSvg.offsetWidth;
   bubbleSvg.style.animation = `bubble-appear ${(duration / 1000).toFixed(1)}s ease-in-out forwards`;
 
   cat.speechTimer = setTimeout(() => {
@@ -300,12 +307,10 @@ function feed() {
     setPose('overfed');
     const line = OVERFED_LINES[Math.floor(Math.random() * OVERFED_LINES.length)];
     showSpeech(line, 4000);
-    // After 30 min, fall asleep
     setTimeout(() => { if (cat.pose === 'overfed') setPose('sleeping'); }, 30 * 60 * 1000);
     return;
   }
 
-  // Normal feed
   cat.config.lastFed = now;
   window.catAPI.saveState({ lastFed: cat.config.lastFed });
   incrementXP(10);
@@ -348,12 +353,10 @@ function resetIdleTimer() {
   clearTimeout(cat.idleTimer);
   cat.idleTimer = setTimeout(onLongIdle, ANGRY_AFTER_IDLE);
 
-  // Soften if angry
   if (cat.pose === 'angry') {
     setPose('idle');
     showSpeech('hmmph.', 1500);
   }
-  // Unstretch if sunbathing
   if (cat.pose === 'sunbathing') {
     setPose('idle');
   }
@@ -368,7 +371,6 @@ function onLongIdle() {
     setPose('sleeping');
   } else if (idleMs >= ANGRY_AFTER_IDLE) {
     setPose('angry');
-    // Re-arm for the sleep threshold
     cat.idleTimer = setTimeout(onLongIdle, SLEEP_AFTER_IDLE - ANGRY_AFTER_IDLE);
   }
 }
@@ -406,14 +408,11 @@ function triggerMirrorStare() {
   if (cat.pose !== 'idle' || cat.suspended) return;
   cat.isMirrorStaring = true;
   showSpeech('I see you.', 5000);
-
-  // After the stare, back to normal
   setTimeout(() => { cat.isMirrorStaring = false; }, 5500);
 }
 
 // ── Hourly events ──────────────────────────────────────────
 function scheduleHourlyEvents() {
-  // Mirror stare: random between 45–75 min
   const delay = 45 * 60 * 1000 + Math.random() * 30 * 60 * 1000;
   cat.hourlyTimer = setTimeout(() => {
     triggerMirrorStare();
@@ -431,7 +430,6 @@ function triggerStartled() {
 
 // ── Input detection ────────────────────────────────────────
 function setupInputDetection() {
-  // Keydown → typing detection
   window.addEventListener('keydown', (e) => {
     if (cat.suspended) return;
     resetIdleTimer();
@@ -447,14 +445,12 @@ function setupInputDetection() {
       }
     }
 
-    // Return to idle 2s after last keypress
     clearTimeout(cat.typingTimeout);
     cat.typingTimeout = setTimeout(() => {
       if (cat.pose === 'typing') setPose('idle');
     }, 2000);
   });
 
-  // Scroll → roll animation
   window.addEventListener('wheel', () => {
     if (cat.suspended) return;
     resetIdleTimer();
@@ -467,33 +463,27 @@ function setupInputDetection() {
     }, 1000);
   }, { passive: true });
 
-  // Mouse movement resets idle timer
   window.addEventListener('mousemove', () => {
     if (!cat.suspended) resetIdleTimer();
   });
+}
 
-  // Cat click: feed (if hungry) or random reaction
-  container.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (cat.isDragging) return;
+// ── Click handler (called by drag system when no movement) ─
+function handleCatClick() {
+  if (['sleeping', 'overfed'].includes(cat.pose)) {
+    showSpeech('shhh 🤫');
+    return;
+  }
 
-    if (['sleeping', 'overfed'].includes(cat.pose)) {
-      showSpeech('shhh 🤫');
-      return;
-    }
+  const elapsed = Date.now() - (cat.config.lastFed || 0);
+  if (cat.pose === 'hungry' || elapsed >= HUNGRY_THRESHOLD) {
+    feed();
+    return;
+  }
 
-    // Check hunger regardless of exact pose (lastFed check)
-    const elapsed = Date.now() - (cat.config.lastFed || 0);
-    if (cat.pose === 'hungry' || elapsed >= HUNGRY_THRESHOLD) {
-      feed();
-      return;
-    }
-
-    // Random pet reaction
-    const reaction = PET_REACTIONS[Math.floor(Math.random() * PET_REACTIONS.length)];
-    showSpeech(reaction, 2000);
-    incrementXP(1);
-  });
+  const reaction = PET_REACTIONS[Math.floor(Math.random() * PET_REACTIONS.length)];
+  showSpeech(reaction, 2000);
+  incrementXP(1);
 }
 
 // ── Drag system ────────────────────────────────────────────
@@ -516,26 +506,50 @@ function startDrag(e) {
   if (cat.pose === 'sleeping') { showSpeech('shhh 🤫'); return; }
   e.preventDefault();
   cat.isDragging   = true;
+  cat.dragMoved    = false;
   cat.lastDragPos  = eventPos(e);
   cat.lastDragTime = Date.now();
   cat.dragVelocity = { x: 0, y: 0 };
-  setPose('walk');
+  window.catAPI.dragStart();
 }
 
 function doDrag(e) {
   if (!cat.isDragging) return;
   e.preventDefault();
+
   const pos = eventPos(e);
   const dx  = pos.x - cat.lastDragPos.x;
   const dy  = pos.y - cat.lastDragPos.y;
-  cat.dragVelocity = { x: dx, y: dy };
-  cat.lastDragPos  = pos;
-  window.catAPI.moveWindow({ dx, dy });
+
+  // Only commit to a drag once cursor moves more than 4px
+  if (!cat.dragMoved && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+
+  if (!cat.dragMoved) {
+    cat.dragMoved = true;
+    setPose('walk');
+  }
+
+  // Smooth velocity with a tiny lerp so inertia feels natural
+  cat.dragVelocity = {
+    x: dx * 0.6 + cat.dragVelocity.x * 0.4,
+    y: dy * 0.6 + cat.dragVelocity.y * 0.4,
+  };
+  cat.lastDragPos = pos;
+
+  // Ask main process to snap window centre to cursor — zero lag, no delta math
+  window.catAPI.moveToCursor();
 }
 
 function endDrag() {
   if (!cat.isDragging) return;
   cat.isDragging = false;
+  window.catAPI.dragEnd(); // re-enable polling
+
+  if (!cat.dragMoved) {
+    handleCatClick();
+    return;
+  }
+
   applyInertia(cat.dragVelocity.x, cat.dragVelocity.y);
   cat.positionSince = Date.now();
   setTimeout(() => { if (cat.pose === 'walk') setPose('idle'); }, 400);
@@ -552,30 +566,13 @@ function applyInertia(vx, vy) {
   requestAnimationFrame(step);
 }
 
-
-
 // ── Size ───────────────────────────────────────────────────
-
-// ── Cat rect reporting ─────────────────────────────────────
-function reportCatRect() {
-  const svg = svgEl();
-  if (!svg) return;
-  const r = svg.getBoundingClientRect();
-  window.catAPI.setCatRect({
-    x: Math.floor(r.left),
-    y: Math.floor(r.top),
-    w: Math.ceil(r.width),
-    h: Math.ceil(r.height)
-  });
-}
-
 function applySize(px) {
   const svg = svgEl();
   if (svg) {
     svg.setAttribute('width',  px);
     svg.setAttribute('height', px);
   }
-  // Also resize the container to roughly match
   const padded = px + 40;
   container.style.width  = padded + 'px';
   container.style.height = padded + 'px';
@@ -599,7 +596,6 @@ function incrementXP(amount) {
 }
 
 function checkXPMilestones() {
-  // 100 XP ≈ 1 day of regular interaction
   const days   = Math.floor(cat.config.xp / 100);
   const earned = [...(cat.config.accessories || [])];
   let changed  = false;
@@ -621,26 +617,20 @@ function checkXPMilestones() {
 
 // ── Timers ─────────────────────────────────────────────────
 function startTimers() {
-  // Hunger: check every 5 min
   checkHunger();
   cat.hungryInterval = setInterval(checkHunger, 5 * 60 * 1000);
 
-  // Sunbathe: check every 2 min
   cat.sunbatheInterval = setInterval(checkSunbathe, 2 * 60 * 1000);
 
-  // Moonlight: re-check every 30 min
   cat.moonInterval = setInterval(checkMoonlight, 30 * 60 * 1000);
 
-  // Random speech every 8–15 min
   (function scheduleSpeech() {
     const delay = (8 + Math.random() * 7) * 60 * 1000;
     setTimeout(() => { triggerRandomSpeech(); scheduleSpeech(); }, delay);
   })();
 
-  // Sneeze check every minute
   cat.sneezeInterval = setInterval(maybeSneeze, 60 * 1000);
 
-  // Idle timer
   cat.idleTimer = setTimeout(onLongIdle, ANGRY_AFTER_IDLE);
 }
 
@@ -656,7 +646,6 @@ function onResume() {
   resetIdleTimer();
   checkHunger();
   checkMoonlight();
-  // Brief startled on waking up
   setTimeout(triggerStartled, 500);
 }
 

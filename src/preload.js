@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld('catAPI', {
   getConfig:      ()      => ipcRenderer.invoke('get-config'),
   savePosition:   (pos)   => ipcRenderer.send('save-position', pos),
   moveWindow:     (delta) => ipcRenderer.send('move-window', delta),
+  moveToCursor:   ()      => ipcRenderer.send('move-to-cursor'),
+  setCatRect:     (rect)  => ipcRenderer.send('set-cat-rect', rect),
   saveState:      (state) => ipcRenderer.send('save-state', state),
   setIgnoreMouse: (v)     => ipcRenderer.send('set-ignore-mouse', v),
   onFeed:    (cb) => ipcRenderer.on('tray-feed',     () => cb()),
@@ -11,5 +13,6 @@ contextBridge.exposeInMainWorld('catAPI', {
   onSetSize: (cb) => ipcRenderer.on('set-size',      (_, sz) => cb(sz)),
   onSuspend: (cb) => ipcRenderer.on('power-suspend', () => cb()),
   onResume:  (cb) => ipcRenderer.on('power-resume',  () => cb()),
-  setCatRect: (rect) => ipcRenderer.send('set-cat-rect', rect),
+  dragStart: () => ipcRenderer.send('drag-start'),
+  dragEnd:   () => ipcRenderer.send('drag-end'),
 });

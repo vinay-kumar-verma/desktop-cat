@@ -4,6 +4,9 @@ const {
 const path = require('path');
 const fs   = require('fs');
 
+// Fix DPI scaling on Windows
+app.commandLine.appendSwitch('high-dpi-support', '1');
+
 const CONFIG_PATH = path.join(app.getPath('userData'), 'cat-config.json');
 const DEFAULT_CONFIG = {
   x: null, y: null, size: 80,
@@ -20,10 +23,15 @@ function saveConfig(cfg) {
 }
 
 let win, tray, config;
+let dragOffset = { x: 80, y: 80 };
 
 app.whenReady().then(() => {
   config = loadConfig();
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+
+  // Get scale factor from primary display
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width, height } = primaryDisplay.workAreaSize;
+
   if (config.x === null) config.x = width  - 200;
   if (config.y === null) config.y = height - 200;
   createWindow();
@@ -34,6 +42,9 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {});
 
 function createWindow() {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const scaleFactor = primaryDisplay.scaleFactor; // 1.25 on your machine
+
   win = new BrowserWindow({
     width: 160, height: 160,
     x: config.x, y: config.y,
@@ -56,20 +67,38 @@ function createWindow() {
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
   win.setIgnoreMouseEvents(true, { forward: true });
 
-  // Poll cursor every 16ms, toggle mouse events based on cat's actual rect
-  let catRect = { x: 0, y: 0, w: 160, h: 160 }; // fallback = full window
+  let catRect  = { x: 0, y: 0, w: 160, h: 160 };
   let ignoring = true;
+  let dragging = false;
 
   ipcMain.on('set-cat-rect', (_, rect) => { catRect = rect; });
 
-  setInterval(() => {
-    if (!win || win.isDestroyed()) return;
+  ipcMain.on('drag-start', () => {
+    dragging = true;
+    ignoring = false;
+    // Compute offset entirely in screen coords — immune to DPI scaling
     const pt       = screen.getCursorScreenPoint();
     const [wx, wy] = win.getPosition();
-    const over = pt.x >= wx + catRect.x &&
-                 pt.x <= wx + catRect.x + catRect.w &&
-                 pt.y >= wy + catRect.y &&
-                 pt.y <= wy + catRect.y + catRect.h;
+    dragOffset = {
+      x: pt.x - wx,
+      y: pt.y - wy
+    };
+    win.setIgnoreMouseEvents(false);
+  });
+
+  ipcMain.on('drag-end', () => {
+    dragging = false;
+  });
+
+  setInterval(() => {
+    if (!win || win.isDestroyed() || dragging) return;
+    const pt       = screen.getCursorScreenPoint();
+    const [wx, wy] = win.getPosition();
+    // Use scaleFactor to convert CSS catRect coords to screen coords
+    const over = pt.x >= wx + catRect.x * scaleFactor &&
+                 pt.x <= wx + (catRect.x + catRect.w) * scaleFactor &&
+                 pt.y >= wy + catRect.y * scaleFactor &&
+                 pt.y <= wy + (catRect.y + catRect.h) * scaleFactor;
     if (over !== !ignoring) {
       ignoring = !over;
       win.setIgnoreMouseEvents(ignoring, { forward: true });
@@ -144,9 +173,9 @@ ipcMain.on('save-position', (_, pos) => {
   saveConfig(config);
 });
 
-// Drag: move window by delta
+// Inertia after drag ends — move by delta
 ipcMain.on('move-window', (_, delta) => {
-  if (!win) return;
+  if (!win || win.isDestroyed()) return;
   const [x, y] = win.getPosition();
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   const newX = Math.max(0, Math.min(width  - 160, x + delta.dx));
@@ -154,10 +183,20 @@ ipcMain.on('move-window', (_, delta) => {
   win.setPosition(newX, newY, false);
 });
 
+// Live drag — cursor stays exactly where it grabbed the window
+ipcMain.on('move-to-cursor', () => {
+  if (!win || win.isDestroyed()) return;
+  const pt = screen.getCursorScreenPoint();
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+  const newX = Math.max(0, Math.min(width  - 160, pt.x - dragOffset.x));
+  const newY = Math.max(0, Math.min(height - 160, pt.y - dragOffset.y));
+  win.setPosition(newX, newY, false);
+});
+
 ipcMain.on('save-state', (_, state) => { Object.assign(config, state); saveConfig(config); });
 ipcMain.handle('get-config', () => config);
 ipcMain.on('set-ignore-mouse', (_, ignore) => {
-  win.setIgnoreMouseEvents(true, { forward: true });
+  if (win) win.setIgnoreMouseEvents(ignore, { forward: true });
 });
 
 function setupPowerMonitor() {
