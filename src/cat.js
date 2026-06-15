@@ -73,6 +73,7 @@ const cat = {
   hourlyTimer:         null,
   sneezeInterval:      null,
   moonInterval:        null,
+  lickTimer:           null,
 
   // Interaction tracking
   lastActivity:   Date.now(),
@@ -251,6 +252,27 @@ function maybeSneeze() {
     particles.classList.remove('active');
     setTimeout(() => { particles.style.display = 'none'; }, 100);
   }, 900);
+}
+
+
+// ── Lick ───────────────────────────────────────────────────
+function doLick() {
+  if (['sleeping','eating','overfed'].includes(cat.pose)) return;
+  if (cat.suspended) return;
+  const prev = cat.pose;
+  // Show lick as speech bubble + brief playing pose
+  showSpeech('*lick lick* 🐾', 1800);
+  setPose('playing');
+  setTimeout(() => {
+    if (cat.pose === 'playing') setPose(prev === 'playing' ? 'idle' : prev);
+  }, 1800);
+}
+
+function scheduleLick() {
+  cat.lickTimer = setTimeout(() => {
+    doLick();
+    scheduleLick();
+  }, 30000); // every 30 seconds
 }
 
 // ── Speech bubbles ─────────────────────────────────────────
@@ -506,12 +528,12 @@ function startDrag(e) {
   if (cat.pose === 'sleeping') { showSpeech('shhh 🤫'); return; }
   e.preventDefault();
   cat.isDragging   = true;
-  cat.dragMoved    = false;
+  cat.dragMoved    = false;                   // haven't moved yet
   cat.lastDragPos  = eventPos(e);
   cat.lastDragTime = Date.now();
   cat.dragVelocity = { x: 0, y: 0 };
-  window.catAPI.dragStart();
-}  
+  // Do NOT change pose here — wait to see if they drag or just click
+}
 
 function doDrag(e) {
   if (!cat.isDragging) return;
@@ -526,31 +548,33 @@ function doDrag(e) {
 
   if (!cat.dragMoved) {
     cat.dragMoved = true;
-    setPose('idle'); // stay visible — walk pose has no SVG group
+    setPose('walk');
   }
 
-  // Track velocity for inertia on release
+  // Smooth velocity with a tiny lerp so inertia feels natural
   cat.dragVelocity = {
     x: dx * 0.6 + cat.dragVelocity.x * 0.4,
     y: dy * 0.6 + cat.dragVelocity.y * 0.4,
   };
   cat.lastDragPos = pos;
-  // Window is moved by main process polling — nothing to call here
+
+  // Ask main process to snap window centre to cursor — zero lag, no delta math
+  window.catAPI.moveToCursor();
 }
 
 function endDrag() {
   if (!cat.isDragging) return;
   cat.isDragging = false;
-  window.catAPI.dragEnd(); // re-enable polling
 
   if (!cat.dragMoved) {
+    // Finger/mouse never moved — treat as a click
     handleCatClick();
     return;
   }
 
   applyInertia(cat.dragVelocity.x, cat.dragVelocity.y);
   cat.positionSince = Date.now();
-  setPose('idle');
+  setTimeout(() => { if (cat.pose === 'walk') setPose('idle'); }, 400);
 }
 
 function applyInertia(vx, vy) {
@@ -628,6 +652,7 @@ function startTimers() {
   })();
 
   cat.sneezeInterval = setInterval(maybeSneeze, 60 * 1000);
+  scheduleLick();
 
   cat.idleTimer = setTimeout(onLongIdle, ANGRY_AFTER_IDLE);
 }
