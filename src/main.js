@@ -4,7 +4,6 @@ const {
 const path = require('path');
 const fs   = require('fs');
 
-// Fix DPI scaling on Windows
 app.commandLine.appendSwitch('high-dpi-support', '1');
 
 const CONFIG_PATH = path.join(app.getPath('userData'), 'cat-config.json');
@@ -23,15 +22,13 @@ function saveConfig(cfg) {
 }
 
 let win, tray, config;
-let dragOffset = { x: 80, y: 80 };
+let dragOffset   = { x: 80, y: 80 };
+let dragging     = false;
+let dragInterval = null;
 
 app.whenReady().then(() => {
   config = loadConfig();
-
-  // Get scale factor from primary display
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { width, height } = primaryDisplay.workAreaSize;
-
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   if (config.x === null) config.x = width  - 200;
   if (config.y === null) config.y = height - 200;
   createWindow();
@@ -41,9 +38,24 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {});
 
+function startDragLoop() {
+  if (dragInterval) return;
+  dragInterval = setInterval(() => {
+    if (!win || win.isDestroyed() || !dragging) return;
+    const pt = screen.getCursorScreenPoint();
+    const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+    const newX = Math.max(0, Math.min(width  - 160, pt.x - dragOffset.x));
+    const newY = Math.max(0, Math.min(height - 160, pt.y - dragOffset.y));
+    win.setPosition(newX, newY, false);
+  }, 8); // 120fps poll — silky smooth
+}
+
+function stopDragLoop() {
+  if (dragInterval) { clearInterval(dragInterval); dragInterval = null; }
+}
+
 function createWindow() {
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const scaleFactor = primaryDisplay.scaleFactor; // 1.25 on your machine
+  const scaleFactor = screen.getPrimaryDisplay().scaleFactor;
 
   win = new BrowserWindow({
     width: 160, height: 160,
@@ -69,32 +81,33 @@ function createWindow() {
 
   let catRect  = { x: 0, y: 0, w: 160, h: 160 };
   let ignoring = true;
-  let dragging = false;
 
   ipcMain.on('set-cat-rect', (_, rect) => { catRect = rect; });
 
   ipcMain.on('drag-start', () => {
     dragging = true;
-    ignoring = false;
-    // Compute offset entirely in screen coords — immune to DPI scaling
+    // Capture offset in screen coords at the moment of mousedown
     const pt       = screen.getCursorScreenPoint();
     const [wx, wy] = win.getPosition();
-    dragOffset = {
-      x: pt.x - wx,
-      y: pt.y - wy
-    };
+    dragOffset = { x: pt.x - wx, y: pt.y - wy };
     win.setIgnoreMouseEvents(false);
+    startDragLoop(); // main process polls cursor — no IPC needed during drag
   });
 
   ipcMain.on('drag-end', () => {
     dragging = false;
+    stopDragLoop();
+    // Save final position
+    const [x, y] = win.getPosition();
+    config.x = x; config.y = y;
+    saveConfig(config);
   });
 
+  // Hit-test polling — only runs when NOT dragging
   setInterval(() => {
     if (!win || win.isDestroyed() || dragging) return;
     const pt       = screen.getCursorScreenPoint();
     const [wx, wy] = win.getPosition();
-    // Use scaleFactor to convert CSS catRect coords to screen coords
     const over = pt.x >= wx + catRect.x * scaleFactor &&
                  pt.x <= wx + (catRect.x + catRect.w) * scaleFactor &&
                  pt.y >= wy + catRect.y * scaleFactor &&
@@ -173,7 +186,7 @@ ipcMain.on('save-position', (_, pos) => {
   saveConfig(config);
 });
 
-// Inertia after drag ends — move by delta
+// Inertia after drag ends — small nudges by delta
 ipcMain.on('move-window', (_, delta) => {
   if (!win || win.isDestroyed()) return;
   const [x, y] = win.getPosition();
@@ -183,7 +196,7 @@ ipcMain.on('move-window', (_, delta) => {
   win.setPosition(newX, newY, false);
 });
 
-// Live drag — cursor stays exactly where it grabbed the window
+// No longer needed for drag but keep for any future use
 ipcMain.on('move-to-cursor', () => {
   if (!win || win.isDestroyed()) return;
   const pt = screen.getCursorScreenPoint();

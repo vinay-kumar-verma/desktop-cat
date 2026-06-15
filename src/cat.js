@@ -502,16 +502,7 @@ function eventPos(e) {
     : { x: e.clientX,            y: e.clientY };
 }
 
-function startDrag(e) {
-  if (cat.pose === 'sleeping') { showSpeech('shhh 🤫'); return; }
-  e.preventDefault();
-  cat.isDragging   = true;
-  cat.dragMoved    = false;
-  cat.lastDragPos  = eventPos(e);
-  cat.lastDragTime = Date.now();
-  cat.dragVelocity = { x: 0, y: 0 };
-  window.catAPI.dragStart();
-}
+  
 
 function doDrag(e) {
   if (!cat.isDragging) return;
