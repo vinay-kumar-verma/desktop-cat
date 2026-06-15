@@ -502,7 +502,16 @@ function eventPos(e) {
     : { x: e.clientX,            y: e.clientY };
 }
 
-  
+function startDrag(e) {
+  if (cat.pose === 'sleeping') { showSpeech('shhh 🤫'); return; }
+  e.preventDefault();
+  cat.isDragging   = true;
+  cat.dragMoved    = false;
+  cat.lastDragPos  = eventPos(e);
+  cat.lastDragTime = Date.now();
+  cat.dragVelocity = { x: 0, y: 0 };
+  window.catAPI.dragStart();
+}  
 
 function doDrag(e) {
   if (!cat.isDragging) return;
@@ -517,18 +526,16 @@ function doDrag(e) {
 
   if (!cat.dragMoved) {
     cat.dragMoved = true;
-    setPose('walk');
+    setPose('idle'); // stay visible — walk pose has no SVG group
   }
 
-  // Smooth velocity with a tiny lerp so inertia feels natural
+  // Track velocity for inertia on release
   cat.dragVelocity = {
     x: dx * 0.6 + cat.dragVelocity.x * 0.4,
     y: dy * 0.6 + cat.dragVelocity.y * 0.4,
   };
   cat.lastDragPos = pos;
-
-  // Ask main process to snap window centre to cursor — zero lag, no delta math
-  window.catAPI.moveToCursor();
+  // Window is moved by main process polling — nothing to call here
 }
 
 function endDrag() {
@@ -543,7 +550,7 @@ function endDrag() {
 
   applyInertia(cat.dragVelocity.x, cat.dragVelocity.y);
   cat.positionSince = Date.now();
-  setTimeout(() => { if (cat.pose === 'walk') setPose('idle'); }, 400);
+  setPose('idle');
 }
 
 function applyInertia(vx, vy) {
